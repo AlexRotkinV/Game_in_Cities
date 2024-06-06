@@ -1,23 +1,177 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.10.34916.146
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "Tg bot cities", "Tg bot cities.pyproj", "{2097BDFE-7B62-4788-B308-E5D6B2F4FA83}"
-EndProject
-Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{2097BDFE-7B62-4788-B308-E5D6B2F4FA83}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2097BDFE-7B62-4788-B308-E5D6B2F4FA83}.Release|Any CPU.ActiveCfg = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {E0D2AD9D-C325-4F96-BEE0-6AD77D5ABEF6}
-	EndGlobalSection
-EndGlobal
+# -*- coding: windows-1251 -*-
+import random
+import requests
+from bs4 import BeautifulSoup
+import telebot
+from telebot import types
+
+st_accept = "text/html"
+st_useragent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
+headers = {
+   "Accept": st_accept,
+   "User-Agent": st_useragent
+}
+lang = {'а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e', 'ё':'e', 'ж':'zh', 'з':'z', 'и':'i', 'й':'j',
+        'к':'k', 'л':'l', 'м':'m', 'н':'n', 'о':'o', 'п':'p', 'р':'r', 'с':'s', 'т':'t', 'у':'u', 'ф':'f', 'х':'h',
+       'ц':'ts', 'ч':'ch', 'ш':'sh', 'щ':'shch', 'ы':'y', 'э':'ee', 'ю':'yu', 'я':'ya'}
+city = {}
+n = {}
+post = {}
+flag = {}
+print("Bot is ready")
+try:
+    bot = telebot.TeleBot("TOKEN")
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    start_button = types.KeyboardButton("Начать игру")
+    rules = types.KeyboardButton("Правила игры")
+    avtor = types.KeyboardButton("Автор")
+    endd = types.KeyboardButton("Закончить")
+
+    @bot.message_handler(commands=['start']) #запуск бота и приветствие 
+    def start(message):
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+        markup.row(start_button)
+        markup.row(rules)
+        markup.row(avtor)
+        bot.send_message(message.chat.id, f'{message.from_user.first_name}, добро пожаловать в игру "Города"!\nВыбери действие в меню', reply_markup=markup)
+        bot.send_message(chat_id=992586773, text=f"Посетил: @{message.from_user.username}")
+        flag[message.chat.id] = 1
+
+    @bot.message_handler()
+    def main(message): #меню
+        user_id = message.chat.id
+        city[user_id] = {"cities": []}
+        n[user_id] = 0
+        post[user_id] = "aaa"
+        if message.text == "Начать игру":
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+            markup.row(endd)
+            bot.send_message(message.chat.id, "Называйте город!", reply_markup=markup)
+            bot.register_next_step_handler(message, game)
+            flag[user_id] = 0
+        elif message.text == "Правила игры":
+            bot.send_message(message.chat.id, "С вас начинается первый ход - любой город, затем робот в ответ пишет город, который начинается на ту букву, на которую заканчивается ваш. Далее ход за вами по такому же принципу.\n\nУчтите, если город заканчивается на Ъ или Ь, то нужно назвать город на предпоследнюю букву.\n\nЧтобы начать игру, напишите в чат 'Начать игру', а чтобы закончить её, напишите 'Закончить'")
+        elif message.text == "Автор":
+            markup1 = types.InlineKeyboardMarkup()
+            markup1.add(types.InlineKeyboardButton("Канал автора", url="https://t.me/akexrotkin_prog"))
+            bot.send_message(message.chat.id, "Игру сделал: Алексей Роткин", reply_markup=markup1)
+        else:
+            try:
+                if flag[user_id] == 1:
+                    start(message)
+            except:
+                flag[user_id] = 1
+                start(message)
+      
+    def yborka(word_ybor): #убирает ы, ъ у окончания
+        word_ybor = word_ybor.lower()
+        word_ybor = word_ybor.replace("-", " ")
+        word_ybor = word_ybor.replace("ё", "е")
+        if(word_ybor[-1] == "ь" or word_ybor[-1] == "ъ"):
+            word_ybor = word_ybor[:-1]
+        return word_ybor
+
+    def check(message, post): #проверка города от пользователя (post для последней буквы города)
+        word = message.text
+        user_id = message.chat.id
+        a = b = True
+        word = word.lower()
+        if n[user_id] >= 1:
+            if (word[0] != post):
+                bot.send_message(message.chat.id, f"Город должен начинаться на букву {post.upper()}") 
+                return 0
+        while a: #был ли такой город
+            xa = True
+            for xx in city[user_id]["cities"]:
+                if yborka(word) == xx:
+                    xa = False
+            if xa:
+                a = False
+            else:
+                bot.send_message(message.chat.id, "Такой город уже был")            
+                b = False
+                break 
+        while b: #проверка есть ли такой город
+            yb = False
+            req = requests.get(f"https://geo.koltyrin.ru/goroda_poisk.php?city={word}&blur=0", headers)
+            src = req.text
+            soup = BeautifulSoup(src, 'html.parser')
+            title1 = soup.find_all("h2")
+            for tag in title1:
+                title = tag.get_text()
+            title1 = title.split()
+            if title1[0] == "Город":
+                yb = True
+            if yb:
+                b = False
+            else:
+                bot.send_message(message.chat.id, "Похоже, такого города нет")
+                break
+        if a or b:
+            return 0
+        else:
+            return word
+
+    def game(message): #сама игра
+        user_id = message.chat.id
+        if message.text == "Закончить":
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+            markup.row(start_button)
+            markup.row(rules)
+            markup.row(avtor)
+            bot.send_message(message.chat.id, "Игра закончена", reply_markup=markup)
+            city[user_id] = {"cities": []}
+            n[user_id] = 0
+            flag[user_id] = 1
+            post[user_id] = "aaaаа"
+        elif message.text == "/start":
+            start(message)
+        else: #игра и обработка города от пользователя
+            word = check(message, post[user_id])
+            if word == 0:
+                bot.register_next_step_handler(message, game)
+            else: #продолжение если город игрока подошел
+                n[user_id] = 1
+                used_word = yborka(word)
+                city[user_id]["cities"].append(used_word)
+                bukva = lang[used_word[-1]]
+                req = requests.get(f"https://abvgdee.ru/goroda/na-bukvu-{bukva}", headers)
+                src = req.text
+                soup = BeautifulSoup(src, 'html.parser')
+                title_bot = soup.find_all("div", class_="item-page")
+                for tag in title_bot:
+                    city_bot = tag.get_text()
+                city_bot = city_bot.split("\n")
+                for x in range(len(city_bot)):
+                    if city_bot[x] == " 02 апр 2018 ":
+                        city_bot = city_bot[:0] + city_bot[x + 5:]
+                        break
+                for x in range(len(city_bot)):
+                    if city_bot[x] == " Обновлено: 09 сен 2018 ":
+                        city_bot = city_bot[:x - 5] + city_bot[-1:]
+                        city_bot = city_bot[:-1]
+                        break
+                while True:
+                    x = random.randint(0, len(city_bot))
+                    city_bot = city_bot[x]
+                    www = True
+                    for j in city[user_id]["cities"]:
+                        if j == yborka(city_bot):
+                            www = False
+                    if www:
+                        bot.send_message(message.chat.id, city_bot)
+                        city_bot = yborka(city_bot)
+                        city[user_id]["cities"].append(city_bot)
+                        post[user_id] = city_bot[-1]
+                        bot.register_next_step_handler(message, game)
+                        break
+                    else: 
+                        n[user_id] += 1
+                    if n[user_id] > 100000:
+                        bot.send_message(message.chat.id, f"Города закончились, Вы победили!")
+                        start(message)
+            
+
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+except:
+    pass
